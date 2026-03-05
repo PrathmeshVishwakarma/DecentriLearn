@@ -7,7 +7,7 @@ from torchvision import datasets, transforms
 import random
 
 from averager import federated_averaging
-from trainer import train
+from trainer import train, test
 
 
 class net(nn.Module):
@@ -73,12 +73,12 @@ main_model.to(device)
 # print(torch.argmax(torch.softmax(main_model(dummy_input), dim=1), dim=1))
 
 """ Training the model a little, taking 100 of each digits """
+print("Little Training begins: ")
 sample_trainer_images, sample_trainer_labels = [], []
 for i in train_digit_dataset.keys():
     for _ in range(100):
         idx = random.randint(0, 5_000)  # select a random index, so we wont be training first 100
         image, label = train_digit_dataset[i][idx]
-        image, label = image.to(device), label.to(device)
         sample_trainer_images.append(image)
         sample_trainer_labels.append(label)
 sample_trainer_images = torch.stack(sample_trainer_images)
@@ -86,32 +86,23 @@ sample_trainer_labels = torch.tensor(sample_trainer_labels)
 little_trainer_dataset = TensorDataset(sample_trainer_images, sample_trainer_labels)
 little_trainer_dataloader = DataLoader(dataset=little_trainer_dataset, shuffle=True, batch_size=32)
 
-
-
+main_model = train(main_model, little_trainer_dataloader)
+# test(main_model, test_loader)
 
 # ## To check if model is getting trained, should be around 10% as only 1 digit is trained
 # # zero = net()
 # # train(zero, train_digit_loader[0])
-# # metric = MulticlassAccuracy(num_classes=10)
-# # for images, labels in test_loader:
-# #     images, labels = images.to(device), labels.to(device)
-# #     out = zero(images)
-# #     print(metric(out, labels) * 100)
-# #     break
+# # train(zero, test_loader)
 
 
-# """ Training Phase """
-# all_models_weights = []
+""" Training Phase """
+print("Nodal modal training: ")
+all_models_weights = []
 
-# for digit in range(10):
-#     model = net()
-#     train(model=model, dataloader=train_digit_loader[digit], device=device)
-#     all_models_weights.append(model.state_dict())
+for digit in range(10):
+    model = net()
+    model = train(model=model, dataloader=train_digit_loader[digit], device=device)
+    all_models_weights.append(model.state_dict())
 
-# main_model = federated_averaging(main_model, all_models_weights)
-# metric = MulticlassAccuracy(num_classes=10)
-# for images, labels in test_loader:
-#     images, labels = images.to(device), labels.to(device)
-#     out = main_model(images)
-#     print(metric(out, labels) * 100)
-#     break
+main_model = federated_averaging(main_model, all_models_weights)
+test(main_model, test_loader)

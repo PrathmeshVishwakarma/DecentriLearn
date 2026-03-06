@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 import torch.nn as nn
-from torch.utils.data import DataLoader, Subset, TensorDataset
+from torch.utils.data import DataLoader, Subset, ConcatDataset, TensorDataset
 from torchmetrics.classification import MulticlassAccuracy
 from torchvision import datasets, transforms
 import random
@@ -37,11 +37,14 @@ class net(nn.Module):
         return x
 
 
-transform = transforms.Compose(
-    [transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))]
-)
+transform = transforms.Compose([
+    transforms.ToTensor(), 
+    transforms.Normalize((0.1307,), (0.3081,))
+    ])
+target_transform = transforms.Lambda(lambda y: torch.tensor(y))
+
 train_dataset = datasets.MNIST(
-    root="./data", train=True, download=True, transform=transform
+    root="./data", train=True, download=True, transform=transform, target_transform=target_transform
 )
 test_dataset = datasets.MNIST(
     root="./data", train=False, download=True, transform=transform
@@ -77,22 +80,38 @@ print("Little Training begins: ")
 sample_trainer_images, sample_trainer_labels = [], []
 for i in train_digit_dataset.keys():
     for _ in range(100):
-        idx = random.randint(0, 5_000)  # select a random index, so we wont be training first 100
+        idx = random.randint(
+            0, 5_000
+        )  # select a random index, so we wont be training first 100
         image, label = train_digit_dataset[i][idx]
         sample_trainer_images.append(image)
         sample_trainer_labels.append(label)
 sample_trainer_images = torch.stack(sample_trainer_images)
 sample_trainer_labels = torch.tensor(sample_trainer_labels)
 little_trainer_dataset = TensorDataset(sample_trainer_images, sample_trainer_labels)
-little_trainer_dataloader = DataLoader(dataset=little_trainer_dataset, shuffle=True, batch_size=32)
+little_trainer_dataloader = DataLoader(
+    dataset=little_trainer_dataset, shuffle=True, batch_size=32
+)
 
 main_model = train(main_model, little_trainer_dataloader)
 # test(main_model, test_loader)
 
-# ## To check if model is getting trained, should be around 10% as only 1 digit is trained
-# # zero = net()
-# # train(zero, train_digit_loader[0])
-# # train(zero, test_loader)
+alpha_percent = 10
+total_shared_samples = len(little_trainer_dataset)
+num_to_sample = int((alpha_percent / 100) * total_shared_samples)
+
+# Access the raw tensors from your balanced "warm-up" set
+#shared_images = little_trainer_dataset.tensors[0]
+#shared_labels = little_trainer_dataset.tensors[1]
+augmented_train_loader = {}
+
+for digit, private_dataset in train_digit_dataset.items():
+    indices = random.sample(range(total_shared_samples), num_to_sample)
+    shared_subset = Subset(little_trainer_dataset, indices)
+    combined_dataset = ConcatDataset([private_dataset, shared_subset])
+    augmented_train_loader[digit] = DataLoader(
+        dataset=combined_dataset, shuffle=True, batch_size=32
+    )
 
 
 """ Training Phase """
@@ -101,7 +120,8 @@ all_models_weights = []
 
 for digit in range(10):
     model = net()
-    model = train(model=model, dataloader=train_digit_loader[digit], device=device)
+    model.load_state_dict(main_model.state_dict())
+    model = train(model=model, dataloader=augmented_train_loader[digit], device=device)
     all_models_weights.append(model.state_dict())
 
 main_model = federated_averaging(main_model, all_models_weights)

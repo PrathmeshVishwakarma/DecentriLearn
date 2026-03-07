@@ -80,3 +80,4 @@ def test(model: nn.Module, test_loader: DataLoader, device="cpu"):
         out = model(images)
         metric.update(out, labels)
     print(metric.compute()*100)
+    return metric.compute()*100

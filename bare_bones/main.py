@@ -110,6 +110,11 @@ for u in U_models:
 for round in range(num_communication_rounds):
     print(f"\n>> Communication Round {round + 1}/{num_communication_rounds} <<")
     all_models_weights = []
+for digit in range(10):
+    local_model = net()
+    local_model.load_state_dict(main_model.state_dict())
+    local_model = train_with_regularisation(model=local_model, global_model=main_model, dataloader=augmented_train_loader[digit], device=device)
+    all_models_weights.append(local_model.state_dict())
 
     for digit in range(10):
         print(f"Training Node {digit}...")

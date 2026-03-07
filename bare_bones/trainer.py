@@ -38,7 +38,7 @@ def train_with_regularisation(model: nn.Module, global_model: nn.Module, dataloa
     minimize: local_loss(θ_local) + (γ/2) * ||θ_local - θ_global||²
     """
     epochs = 2
-    gamma = 0.01
+    gamma = 0.005
     model.to(device)
     criterion = nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(model.parameters())

@@ -7,7 +7,7 @@ from torchvision import datasets, transforms
 import random
 
 from averager import federated_averaging
-from trainer import train, test
+from trainer import train, test, train_with_regularisation
 
 
 class net(nn.Module):
@@ -119,10 +119,10 @@ print("Nodal modal training: ")
 all_models_weights = []
 
 for digit in range(10):
-    model = net()
-    model.load_state_dict(main_model.state_dict())
-    model = train(model=model, dataloader=augmented_train_loader[digit], device=device)
-    all_models_weights.append(model.state_dict())
+    local_model = net()
+    local_model.load_state_dict(main_model.state_dict())
+    local_model = train_with_regularisation(model=local_model, global_model=main_model, dataloader=train_digit_loader[digit], device=device)
+    all_models_weights.append(local_model.state_dict())
 
 main_model = federated_averaging(main_model, all_models_weights)
 test(main_model, test_loader)
